@@ -21,7 +21,7 @@
 
 ### Cursor
 ```bash
-git clone https://github.com/anthropic-skills/web-reverse-engineering-skill.git
+git clone https://github.com/kings0527/web-reverse-engineering-skill.git
 # .cursorrules 会被自动读取
 ```
 
