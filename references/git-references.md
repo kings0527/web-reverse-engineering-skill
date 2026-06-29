@@ -32,7 +32,13 @@
 ## AI辅助逆向
 
 | 项目 | URL | 说明 | 推荐阅读 |
-|------|-----|------|---------|
+|------|-----|------|----------|
 | Mouseww/anything-analyzer | https://github.com/Mouseww/anything-analyzer | 全能协议分析+AI+MCP Server | src/main/mcp/ |
 | zhizhuodemao/js-reverse-mcp | https://github.com/zhizhuodemao/js-reverse-mcp | AI-first JS逆向MCP Server（Google出品） | src/tools/ |
 | zhaoxuya520/reverse-skill | https://github.com/zhaoxuya520/reverse-skill | 逆向工程Skill知识库 | skills/js-reverse/ |
+
+## 执行工具
+
+| 项目 | URL | 说明 | 推荐阅读 |
+|------|-----|------|----------|
+| kings0527/web-trace | https://github.com/kings0527/web-trace | MCP Server Chrome Extension（JSVMP追踪+WASM分析+隐蔽Hook） | docs/SKILL-INTEGRATION.md |

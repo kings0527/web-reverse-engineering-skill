@@ -254,6 +254,53 @@ applicable_scenarios:
 | 环境修补 | 自定义Proxy监测+逐步补全 | 手写 | jsdom（部分可用） | 完整Chromium |
 | 签名复现验证 | Node.js子进程 | 内置 | Python execjs | 浏览器内运行 |
 
+### 3.3 WebTrace MCP 工具集
+
+WebTrace 是一个 Chrome/Edge Extension，通过 MCP 协议暴露 Web 逆向分析能力。
+AI Agent 可直接调用以下工具执行分析任务，无需手动操作 DevTools。
+
+**安装**：`git clone https://github.com/kings0527/web-trace && cd web-trace && npm install && npm run build`
+**加载**：Chrome → chrome://extensions → 开发者模式 → Load unpacked → 选择 dist/
+**连接**：通过 WebSocket (`ws://127.0.0.1:3100/mcp`) 或 Chrome Runtime Port 与 Agent 通信
+
+#### 可用工具
+
+| Tool | 功能 | 典型场景 |
+|------|------|----------|
+| `detect_protection` | 检测页面保护类型和等级 | 初期侦查，判定反爬类型 |
+| `analyze_jsvmp` | 分析JSVMP代码结构，识别派发循环 | VM逆向，定位操作码分支 |
+| `trace_execution` | 在QuickJS沙箱中执行并收集trace | 离线分析，验证算法逻辑 |
+| `extract_bytecode` | 从页面中提取字节码数组 | JSVMP数据提取 |
+| `extract_wasm` | 提取页面中的WASM模块 | WASM逆向，获取二进制 |
+| `analyze_wasm` | WASM反汇编+加密算法识别 | WASM逆向，定位密码函数 |
+| `dump_wasm_memory` | 读取WASM实例线性内存 | 密钥提取，运行时数据 |
+| `hook_api` | 在页面中设置隐蔽API Hook | 动态监控fetch/crypto等 |
+| `get_hook_logs` | 获取Hook收集的调用日志 | 数据收集，签名参数捕获 |
+| `page_state` | 获取页面完整状态(cookie/storage/scripts) | 初期侦查，环境信息 |
+| `deobfuscate` | 反混淆JS代码（多种变换） | 代码清洗，可读性还原 |
+
+#### 推荐工作流
+
+```
+1. page_state → 了解页面结构和初始状态
+2. detect_protection → 识别保护类型和等级
+3. 根据保护类型选择路径：
+   ├── L1-L2: deobfuscate → 分析清洗后的代码逻辑
+   ├── L3(混淆): deobfuscate → analyze_jsvmp → trace_execution
+   ├── L4(JSVMP): extract_bytecode → analyze_jsvmp → hook_api(crypto/cookie) → get_hook_logs
+   ├── L4-L5(WASM): extract_wasm → analyze_wasm → dump_wasm_memory
+   └── 组合保护: hook_api + extract_bytecode + extract_wasm 联合分析
+```
+
+#### 与其他工具的配合
+
+- **nodriver/patchright**：提供反检测浏览器环境，启动时通过 `--load-extension` 自动加载 WebTrace
+- **mitmproxy**：网络层抓包分析，WebTrace 提供应用层 JS/WASM 分析能力
+- **webcrack**：离线 AST 反混淆，WebTrace 的 `deobfuscate` 提供在线版本（直接对页面代码操作）
+- **curl_cffi**：签名复现验证，WebTrace 的 `hook_api` + `get_hook_logs` 用于捕获签名参数
+
+> 详细使用说明见 `references/webtrace-mcp.md`
+
 ---
 
 # 第二部分：问题细节层 - 各类反爬针对性解法
@@ -716,3 +763,25 @@ uc.loop().run_until_complete(main())
 | 10 | HeapSnapshot timing | 堆快照操作导致的时间异常 | 避免运行时快照 |
 | 11 | Page.addScriptToEvaluateOnNewDocument | 注入脚本的执行时序 | Patchright延迟注入 |
 | 12 | 多标签页行为 | 自动化通常只有一个标签 | 创建多标签模拟 |
+
+---
+
+## 参考文档索引
+
+| 文档 | 路径 | 说明 |
+|------|------|------|
+| 环境修补 | references/env-patching.md | Proxy监测法、BOM/DOM伪造、反检测技术 |
+| CDP绕过 | references/cdp-bypass.md | nodriver/patchright/rebrowser-patches |
+| JS反混淆 | references/deobfuscation.md | webcrack、控制流还原、字符串解密 |
+| JSVMP逆向 | references/jsvmp-reverse-methodology.md | 五步法、操作码分析、执行追踪 |
+| JSVMP架构 | references/jsvmp-architecture.md | 38条指令集、栈式/寄存器式VM |
+| 协议指纹 | references/protocol-fingerprinting.md | JA3/JA4、HTTP/2、QUIC |
+| WASM逆向 | references/wasm-reverse.md | wabt、Ghidra、加密算法识别 |
+| 多重保护 | references/layered-protection-bypass.md | 分层击破策略 |
+| 反爬维护 | references/anti-crawler-maintenance.md | 监控、更新、持久化 |
+| 网络拦截 | references/network-interception.md | mitmproxy、请求修改 |
+| Chrome Extension | references/chrome-extension-helper.md | 扩展开发与注入 |
+| 调试技巧 | references/debugging-techniques.md | 断点、LogPoint、条件调试 |
+| AI逆向 | references/ai-reverse-tools.md | MCP Server、AI辅助分析 |
+| WebTrace MCP | references/webtrace-mcp.md | MCP工具集详细使用指南 |
+| 参考项目 | references/git-references.md | Git清单、开源项目索引 |

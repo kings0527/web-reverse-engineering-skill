@@ -46,6 +46,10 @@ Step 4（判定）：
 | WASM分析 | wabt, Ghidra |
 | 环境修补 | Node.js + Proxy监测法 |
 | JSVMP追踪 | Proxy Hook + Chrome DevTools LogPoint |
+| JSVMP追踪(MCP) | WebTrace: extract_bytecode + analyze_jsvmp + trace_execution |
+| WASM分析(MCP) | WebTrace: extract_wasm + analyze_wasm + dump_wasm_memory |
+| 页面侦查(MCP) | WebTrace: page_state + detect_protection |
+| API监控(MCP) | WebTrace: hook_api + get_hook_logs |
 | CDP反检测 | nodriver / patchright / rebrowser-patches |
 
 ## 环境修补核心
@@ -87,4 +91,5 @@ references/ 目录下的文档按需查阅：
 - Chrome Extension → references/chrome-extension-helper.md
 - 调试技巧 → references/debugging-techniques.md
 - AI逆向 → references/ai-reverse-tools.md
+- WebTrace MCP → references/webtrace-mcp.md
 - 参考项目 → references/git-references.md
