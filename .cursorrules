@@ -1,0 +1,90 @@
+# Web Reverse Engineering Skill
+
+## 核心原则
+1. **Observe-first**：先观察再行动，不盲目尝试
+2. **Evidence-based**：所有结论基于可验证证据
+3. **Minimum-patch**：最小化修补，够用即可
+4. **Layer-by-layer**：分层分析，从外到内逐层突破
+5. **Verify-always**：每步操作后立即验证
+
+## 10分钟快速反爬判定
+
+Step 1（curl请求）：正常→L1 | 403→TLS/IP | HTML无数据→需JS
+Step 2（DevTools）：challenge页→L3 | cookie特征→定性 | JS混淆→评级
+Step 3（请求参数）：签名变化→L4 | 自定义Header→加密字段
+Step 4（判定）：
+
+| 结果 | 等级 | 方案 |
+|------|------|------|
+| curl可获取 | L1 | curl_cffi |
+| 需简单cookie | L2 | 环境修补 |
+| challenge页 | L3 | nodriver/patchright |
+| JSVMP+签名 | L4 | VM执行追踪+操作码分析 |
+| 全栈+行为 | L5 | 分层击破 |
+
+## 分析路径
+
+```
+目标网站
+├── 无JS加密 → curl_cffi + 代理池
+├── 简单JS → webcrack反混淆 + 环境修补
+├── 重度混淆 → 动态调试 + 控制流还原
+├── JSVMP → 执行追踪 + 操作码还原 + 算法提取
+├── WASM → wabt + Ghidra
+└── 组合保护 → 分层击破（references/layered-protection-bypass.md）
+```
+
+## 工具选择
+
+| 场景 | 推荐工具 |
+|------|---------|
+| TLS/HTTP2指纹 | curl_cffi |
+| 浏览器自动化(反检测) | nodriver |
+| JS反混淆 | webcrack, js-deobfuscator |
+| 网络抓包(无痕) | SSLKEYLOGFILE+Wireshark |
+| 网络抓包(交互式) | mitmproxy |
+| WASM分析 | wabt, Ghidra |
+| 环境修补 | Node.js + Proxy监测法 |
+| JSVMP追踪 | Proxy Hook + Chrome DevTools LogPoint |
+| CDP反检测 | nodriver / patchright / rebrowser-patches |
+
+## 环境修补核心
+
+```javascript
+// Proxy递归监测法
+const handler = {
+  get(target, prop) {
+    console.log(`[ACCESS] ${prop}`);
+    if (!(prop in target)) return new Proxy({}, handler);
+    return target[prop];
+  }
+};
+globalThis.window = new Proxy({}, handler);
+```
+
+## 分层观测策略
+
+面对复杂保护时，按以下层级逐步深入：
+1. **API层**：Hook fetch/XHR/WebSocket，观察请求参数
+2. **函数层**：DevTools Debugger定位加密函数入口
+3. **字节码层**：LogPoint追踪VM派发循环操作码
+4. **网络层**：SSLKEYLOGFILE + Wireshark/mitmproxy
+
+每层只在上层信息不足时才深入，避免信息过载。
+
+## 详细参考
+
+references/ 目录下的文档按需查阅：
+- 环境修补 → references/env-patching.md
+- CDP绕过 → references/cdp-bypass.md
+- JS反混淆 → references/deobfuscation.md
+- JSVMP逆向 → references/jsvmp-reverse-methodology.md
+- 协议指纹 → references/protocol-fingerprinting.md
+- WASM逆向 → references/wasm-reverse.md
+- 多重保护 → references/layered-protection-bypass.md
+- 反爬维护 → references/anti-crawler-maintenance.md
+- 网络拦截 → references/network-interception.md
+- Chrome Extension → references/chrome-extension-helper.md
+- 调试技巧 → references/debugging-techniques.md
+- AI逆向 → references/ai-reverse-tools.md
+- 参考项目 → references/git-references.md
