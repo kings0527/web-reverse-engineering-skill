@@ -42,3 +42,9 @@
 | 项目 | URL | 说明 | 推荐阅读 |
 |------|-----|------|----------|
 | kings0527/web-trace | https://github.com/kings0527/web-trace | MCP Server Chrome Extension（JSVMP追踪+WASM分析+隐蔽Hook） | docs/SKILL-INTEGRATION.md |
+
+## 引擎级AI逆向
+
+| 项目 | URL | 说明 | 推荐阅读 |
+|------|-----|------|----------|
+| WhiteNightShadow/firefox-reverse | https://github.com/WhiteNightShadow/firefox-reverse | Firefox引擎级AI逆向智能体（需Firefox环境，45+工具） | docs/, README |

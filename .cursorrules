@@ -76,6 +76,15 @@ globalThis.window = new Proxy({}, handler);
 
 每层只在上层信息不足时才深入，避免信息过载。
 
+## 递进式逆向策略
+
+**黑盒优先**：先补环境跑起来（1-4h），实打验证通过即可用
+**按需白盒**：需要长期维护时，通过分支诊断法逐步转为纯算法实现
+
+## 成本优化
+
+批量分析时使用 worker(弱模型) + director(强模型) 架构，降本60-70%
+
 ## 详细参考
 
 references/ 目录下的文档按需查阅：
@@ -92,4 +101,6 @@ references/ 目录下的文档按需查阅：
 - 调试技巧 → references/debugging-techniques.md
 - AI逆向 → references/ai-reverse-tools.md
 - WebTrace MCP → references/webtrace-mcp.md
+- 密码学识别 → references/crypto-identification.md
+- 白盒诊断 → references/whitebox-diagnosis.md
 - 参考项目 → references/git-references.md
