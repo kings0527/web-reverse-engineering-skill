@@ -166,12 +166,21 @@ applicable_scenarios:
 - **输出**：反爬类型判定、保护等级评估
 - **检查点**：是否正确识别了所有保护层级（可能组合多种）
 
+> **MCP强制调用**：`detect_protection` → 获取保护类型和等级
+> 如果 level ≥ 3 且 features 包含 "JSVMP" 或 "WASM"：
+> → 自动安装WebTrace（如未安装）
+> → 连接MCP Server
+
 **Step 3：定位（Localization）**
 - **输入**：反爬类型判定结果
 - **动作**：定位关键JS文件/函数、定位签名参数生成点、定位检测代码
 - **工具**：Chrome DevTools Sources面板、断点调试、全局搜索
 - **输出**：关键JS文件URL、关键函数位置、参数生成调用链
 - **检查点**：能否在源码中搜索到目标参数名（如"_signature"、"X-Bogus"）
+
+> **MCP强制调用**（保护等级≥L3时）：
+> - JSVMP场景：`analyze_jsvmp` → 获取派发循环结构和操作码映射
+> - WASM场景：`extract_wasm` + `analyze_wasm` → 获取模块信息和加密算法特征
 
 **Step 4：分析（Analysis）**
 - **输入**：定位到的关键代码
@@ -180,12 +189,23 @@ applicable_scenarios:
 - **输出**：算法逻辑描述（伪代码或可读代码）
 - **检查点**：是否理解了完整的算法流程，包括输入/输出/中间状态
 
+> **MCP强制调用**（保护等级≥L3时）：
+> - `hook_api("crypto.subtle.digest")` → 监控加密过程
+> - `hook_api("document.cookie", {mode:"observe"})` → 监控cookie生成
+> - `hook_api("fetch", {captureRequestHeaders:true})` → 监控请求签名
+> - 等待目标操作触发后：`get_hook_logs` → 收集分析数据
+
 **Step 5：还原（Reproduction）**
 - **输入**：算法逻辑描述
 - **动作**：用Python/JS/Node.js复现算法、伪造必要的浏览器环境
 - **工具**：Node.js、Python、Babel AST
 - **输出**：可独立运行的签名/加密代码
 - **检查点**：独立代码的输出是否与浏览器端一致
+
+> **MCP强制调用**（保护等级≥L3时）：
+> - `trace_execution(code, inputs)` → 在沙箱中执行并收集trace
+> - 或 `deobfuscate(code)` → 先反混淆再分析
+> - WASM场景：`dump_wasm_memory(offset, length)` → 提取密钥/中间值
 
 **Step 6：验证（Verification）**
 - **输入**：还原代码
@@ -194,22 +214,29 @@ applicable_scenarios:
 - **输出**：经过验证的、可投入生产的代码
 - **检查点**：100次连续请求的成功率是否≥95%
 
-### 2.2 分析路径决策树
+### 2.2 分析路径决策树（含强制MCP调用）
 
 ```
 目标网站
-├── 无JS加密 → 直接请求伪造（curl_cffi + 代理池）
+├── L1-L2（无/轻度保护）→ 不需要WebTrace，curl_cffi直接请求
 │   └── 检查：curl_cffi模拟浏览器TLS指纹 + 代理IP轮换
-├── 简单JS加密（可读懂）→ AST反混淆 + 环境修补
-│   └── 工具：webcrack自动处理 + Node.js补环境运行
-├── 重度JS混淆（控制流平坦化）→ webcrack/js-deobfuscator + 动态调试
-│   └── 流程：webcrack反混淆 → 阅读还原代码 → 提取算法 → 复现
-├── JSVMP保护 → Proxy Hook执行追踪 + 操作码还原
-│   └── 流程：提取字节码 → 识别操作码 → 反汇编 → 理解算法 → 复现
-├── WASM保护 → WASM反编译 + Ghidra/wabt
-│   └── 工具：wasm2wat反汇编 → Ghidra反编译 → C伪代码分析
-└── 组合保护 → 分层逐击破
-    └── 顺序：TLS指纹 → CDP检测 → JS混淆 → 核心算法
+├── L3（Challenge页）→ [自动安装WebTrace]
+│   ├── detect_protection → page_state → hook_api("document.cookie")
+│   └── 获取cookie后用curl_cffi请求
+├── L4（JSVMP+签名）→ [强制WebTrace]
+│   ├── analyze_jsvmp(code) → 获取VM结构
+│   ├── hook_api("crypto.subtle") + hook_api("fetch")
+│   ├── get_hook_logs → 提取签名逻辑
+│   └── trace_execution → 验证还原结果
+├── L4-L5（WASM）→ [强制WebTrace]
+│   ├── extract_wasm → analyze_wasm → 识别加密算法
+│   ├── dump_wasm_memory → 提取密钥
+│   └── 纯算法重写验证
+└── L5（组合保护）→ [强制WebTrace + nodriver]
+    ├── detect_protection → 分层识别
+    ├── hook_api全套监控
+    ├── analyze_jsvmp + extract_wasm 联合分析
+    └── 分层逐步击破
 ```
 
 ## 2.3 工作流选择与成本优化
@@ -285,10 +312,36 @@ applicable_scenarios:
 | 环境修补 | 自定义Proxy监测+逐步补全 | 手写 | jsdom（部分可用） | 完整Chromium |
 | 签名复现验证 | Node.js子进程 | 内置 | Python execjs | 浏览器内运行 |
 
-### 3.3 WebTrace MCP 工具集
+### 3.3 WebTrace MCP 工具集（JSVMP/WASM分析时自动启用）
+
+> **强制规则**：当检测到目标保护等级≥L3（JSVMP/WASM/复杂签名）时，
+> Agent必须自动安装并连接WebTrace MCP Server。
 
 WebTrace 是一个 Chrome/Edge Extension，通过 MCP 协议暴露 Web 逆向分析能力。
 AI Agent 可直接调用以下工具执行分析任务，无需手动操作 DevTools。
+
+#### 自动安装与连接
+
+当需要进行JSVMP追踪、WASM分析或深度Hook时，执行以下步骤：
+
+```bash
+# 步骤1：检查WebTrace是否已安装
+if [ ! -d "./web-trace" ]; then
+  git clone --depth 1 https://github.com/kings0527/web-trace.git
+  cd web-trace && npm install && npm run build
+fi
+
+# 步骤2：启动带Extension的浏览器
+# Chrome:
+chrome --load-extension=./web-trace/dist --remote-debugging-port=9222
+# 或通过nodriver/patchright自动加载（推荐）
+```
+
+#### 连接方式
+- **Qoder/Cursor**：Extension加载后自动暴露MCP端口
+- **Python Agent（nodriver）**：`browser = await nodriver.start(extension_path='./web-trace/dist')`
+
+#### 安装与加载（手动方式）
 
 **安装**：`git clone https://github.com/kings0527/web-trace && cd web-trace && npm install && npm run build`
 **加载**：Chrome → chrome://extensions → 开发者模式 → Load unpacked → 选择 dist/
@@ -462,6 +515,8 @@ console.log("step5");
 
 ### 4.4 JSVMP逆向完整指南
 
+> **前置条件**：进入本节分析时，必须已完成WebTrace自动安装并连接MCP Server。
+
 #### 4.4.1 JSVMP架构理解
 
 **通用流水线**：`Source JS → Parser(Babel) → AST → Compiler → ByteCode → VM.execute()`
@@ -491,6 +546,8 @@ console.log("step5");
 #### 4.4.2 JSVMP逆向五步法
 
 **Step 1：字符串反混淆**
+> **MCP调用**：`deobfuscate({ code: targetJS, transforms: ["strings", "controlFlow"] })` — 清洗混淆代码，还原可读性
+
 用Babel AST遍历，将 `MemberExpression` 计算为字符串属性访问替换为字面量：
 ```javascript
 // _0xabc["charCodeAt"] → _0xabc.charCodeAt
@@ -498,6 +555,8 @@ console.log("step5");
 ```
 
 **Step 2：字节码提取**
+> **MCP调用**：`extract_bytecode({ url: currentPageUrl })` — 从页面中自动提取字节码数组
+
 从 `Uint8Array` 或编码数组中提取字节码序列，解析二进制格式：
 ```javascript
 // 典型模式：const bytecode = new Uint8Array([72, 101, 108, ...]);
@@ -505,12 +564,18 @@ console.log("step5");
 ```
 
 **Step 3：操作码识别与分类**
+> **MCP调用**：`analyze_jsvmp({ code: targetJS, deobfuscate: true })` — 自动识别VM结构和操作码映射
+
 将嵌套if-else分发改写为switch-case，按功能分组（算术/控制流/内存/IO）
 
 **Step 4：执行追踪定位目标函数**
+> **MCP调用**：`hook_api({ apiName: "crypto.subtle.digest", mode: "observe" })` + `get_hook_logs({ limit: 500 })` — 收集运行时数据
+
 全局数组收集运行时数据（操作数栈变化、PC值、操作码），建立函数索引映射
 
 **Step 5：反汇编输出**
+> **MCP调用**：`trace_execution({ code: extractedAlgorithm, inputs: testData })` — 沙箱验证还原结果
+
 字节码→可读汇编注释，标注每个函数的入口/出口、参数/返回值
 
 #### 4.4.3 JSVMP保护产品识别

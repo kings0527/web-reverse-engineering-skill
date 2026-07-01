@@ -26,31 +26,40 @@ Step 4（判定）：
 
 ```
 目标网站
-├── 无JS加密 → curl_cffi + 代理池
-├── 简单JS → webcrack反混淆 + 环境修补
-├── 重度混淆 → 动态调试 + 控制流还原
-├── JSVMP → 执行追踪 + 操作码还原 + 算法提取
-├── WASM → wabt + Ghidra
-└── 组合保护 → 分层击破（references/layered-protection-bypass.md）
+├── L1-L2（无/轻度保护）→ curl_cffi + 代理池
+├── L3（Challenge页）→ [自动安装WebTrace] detect_protection → hook_api → curl_cffi
+├── L4 JSVMP → [强制WebTrace] analyze_jsvmp → hook_api → get_hook_logs → trace_execution
+├── L4-L5 WASM → [强制WebTrace] extract_wasm → analyze_wasm → dump_wasm_memory
+└── L5（组合保护）→ [强制WebTrace + nodriver] 分层击破
 ```
 
-## 工具选择
+## 工具选择（强制规则）
 
-| 场景 | 推荐工具 |
-|------|---------|
-| TLS/HTTP2指纹 | curl_cffi |
-| 浏览器自动化(反检测) | nodriver |
-| JS反混淆 | webcrack, js-deobfuscator |
-| 网络抓包(无痕) | SSLKEYLOGFILE+Wireshark |
-| 网络抓包(交互式) | mitmproxy |
-| WASM分析 | wabt, Ghidra |
-| 环境修补 | Node.js + Proxy监测法 |
-| JSVMP追踪 | Proxy Hook + Chrome DevTools LogPoint |
-| JSVMP追踪(MCP) | WebTrace: extract_bytecode + analyze_jsvmp + trace_execution |
-| WASM分析(MCP) | WebTrace: extract_wasm + analyze_wasm + dump_wasm_memory |
-| 页面侦查(MCP) | WebTrace: page_state + detect_protection |
-| API监控(MCP) | WebTrace: hook_api + get_hook_logs |
-| CDP反检测 | nodriver / patchright / rebrowser-patches |
+| 场景 | 保护等级 | 必须使用 |
+|------|---------|----------|
+| TLS/HTTP2指纹 | L1-L2 | curl_cffi |
+| 浏览器自动化 | L3+ | nodriver |
+| **JSVMP分析** | **L4+** | **WebTrace: analyze_jsvmp + hook_api + trace_execution** |
+| **WASM分析** | **L4+** | **WebTrace: extract_wasm + analyze_wasm + dump_wasm_memory** |
+| **动态监控** | **L3+** | **WebTrace: hook_api + get_hook_logs** |
+| JS反混淆 | any | webcrack（离线）/ WebTrace: deobfuscate（在线） |
+| 网络抓包 | any | mitmproxy / SSLKEYLOGFILE+Wireshark |
+| 环境修补 | any | Node.js + Proxy监测法 |
+| CDP反检测 | L3+ | nodriver / patchright / rebrowser-patches |
+
+## WebTrace自动安装条件
+
+当分析目标的保护等级≥L3且涉及以下场景时，**自动执行安装**：
+- JSVMP/VM派发循环检测
+- WASM模块分析
+- 加密API监控（crypto.subtle等）
+- 动态签名追踪
+
+安装命令：
+```bash
+git clone --depth 1 https://github.com/kings0527/web-trace.git
+cd web-trace && npm install && npm run build
+```
 
 ## 环境修补核心
 
