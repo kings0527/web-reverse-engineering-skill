@@ -47,18 +47,65 @@ Step 4（判定）：
 | 环境修补 | any | Node.js + Proxy监测法 |
 | CDP反检测 | L3+ | nodriver / patchright / rebrowser-patches |
 
-## WebTrace自动安装条件
+## WebTrace 安装与连接（保护等级≥L3时强制执行）
 
-当分析目标的保护等级≥L3且涉及以下场景时，**自动执行安装**：
-- JSVMP/VM派发循环检测
-- WASM模块分析
-- 加密API监控（crypto.subtle等）
-- 动态签名追踪
+### 阶段1：构建（大多数Agent可自动完成）
 
-安装命令：
 ```bash
-git clone --depth 1 https://github.com/kings0527/web-trace.git
-cd web-trace && npm install && npm run build
+# 检查是否已构建
+if [ ! -f "./web-trace/dist/manifest.json" ]; then
+  git clone --depth 1 https://github.com/kings0527/web-trace.git
+  cd web-trace && npm install && npm run build
+fi
+```
+
+### 阶段2：加载Extension到浏览器
+
+**方式A（自动 - 推荐）**：通过nodriver/patchright启动
+```python
+# Python nodriver（反检测浏览器）
+import nodriver as uc
+browser = await uc.start(browser_args=['--load-extension=./web-trace/dist'])
+```
+
+**方式B（自动 - CLI启动）**：直接命令行启动浏览器
+```bash
+# Windows Edge
+msedge --load-extension=./web-trace/dist --remote-debugging-port=9222
+
+# Windows Chrome
+chrome --load-extension=./web-trace/dist --remote-debugging-port=9222
+
+# 浏览器检测（Windows）
+where msedge 2>nul && set BROWSER=msedge || where chrome 2>nul && set BROWSER=chrome
+```
+
+**方式C（引导用户手动加载）**：当Agent无法启动浏览器时，输出以下指引：
+```
+请手动完成以下步骤：
+1. 打开 Edge 或 Chrome 浏览器
+2. 地址栏输入 edge://extensions 或 chrome://extensions
+3. 打开右上角「开发者模式」
+4. 点击「加载已解压的扩展程序」→ 选择 web-trace/dist 目录
+5. 确认扩展列表中出现 "WebTrace"（状态为已启用）
+6. 打开目标网站，通知 Agent 已准备就绪
+```
+
+### 阶段3：连接MCP Server
+
+- Extension加载成功后，MCP Server自动启动
+- 连接地址：`ws://127.0.0.1:3100/mcp`
+- 验证：调用 `detect_protection` 确认响应
+
+### 决策逻辑
+
+```
+Agent检测到 L3+ 保护
+├─ 阶段1：构建 → 成功则继续
+├─ 阶段2：尝试方式A或B
+│  ├─ 成功 → 阶段3连接MCP
+│  └─ 失败 → 输出方式C指引给用户，等待确认后连接MCP
+└─ 阶段3：连接验证 → 失败重试3次 → 仍失败则输出排查指引
 ```
 
 ## 环境修补核心
@@ -113,3 +160,14 @@ references/ 目录下的文档按需查阅：
 - 密码学识别 → references/crypto-identification.md
 - 白盒诊断 → references/whitebox-diagnosis.md
 - 参考项目 → references/git-references.md
+
+## WebTrace 故障排查
+
+| 问题 | 解决方案 |
+|------|----------|
+| 浏览器未检测到 | Windows: `where msedge` / `where chrome`; 确认PATH包含浏览器目录 |
+| npm install 失败 | 确认 Node.js ≥ 18; `npm cache clean --force` 后重试 |
+| dist/ 目录不存在 | 执行 `npm run build`; 检查Vite是否报错 |
+| Extension加载失败 | 确认选择的是 `dist/` 目录（非src/）; 确认开发者模式已开启 |
+| MCP连接拒绝 | 确认Extension已加载且状态为启用; 刷新一下目标页面 |
+| detect_protection超时 | 确认浏览器已导航到目标URL; Service Worker可能需要重载 |

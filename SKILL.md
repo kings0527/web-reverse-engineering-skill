@@ -168,8 +168,9 @@ applicable_scenarios:
 
 > **MCP强制调用**：`detect_protection` → 获取保护类型和等级
 > 如果 level ≥ 3 且 features 包含 "JSVMP" 或 "WASM"：
-> → 自动安装WebTrace（如未安装）
-> → 连接MCP Server
+> → 执行WebTrace安装与连接三阶段流程（见.cursorrules）
+> → 优先自动安装（方式A/B），无法自动则引导用户手动加载（方式C）
+> → 连接验证通过后，方可进入Step 3
 
 **Step 3：定位（Localization）**
 - **输入**：反爬类型判定结果
@@ -320,32 +321,38 @@ applicable_scenarios:
 WebTrace 是一个 Chrome/Edge Extension，通过 MCP 协议暴露 Web 逆向分析能力。
 AI Agent 可直接调用以下工具执行分析任务，无需手动操作 DevTools。
 
-#### 自动安装与连接
+#### 安装与连接（三阶段流程）
 
-当需要进行JSVMP追踪、WASM分析或深度Hook时，执行以下步骤：
-
+**阶段1 - 构建**（Agent自动执行）：
 ```bash
-# 步骤1：检查WebTrace是否已安装
-if [ ! -d "./web-trace" ]; then
-  git clone --depth 1 https://github.com/kings0527/web-trace.git
-  cd web-trace && npm install && npm run build
-fi
-
-# 步骤2：启动带Extension的浏览器
-# Chrome:
-chrome --load-extension=./web-trace/dist --remote-debugging-port=9222
-# 或通过nodriver/patchright自动加载（推荐）
+git clone --depth 1 https://github.com/kings0527/web-trace.git
+cd web-trace && npm install && npm run build
 ```
 
-#### 连接方式
-- **Qoder/Cursor**：Extension加载后自动暴露MCP端口
-- **Python Agent（nodriver）**：`browser = await nodriver.start(extension_path='./web-trace/dist')`
+**阶段2 - 加载Extension**（按Agent能力选择）：
 
-#### 安装与加载（手动方式）
+| Agent类型 | 推荐方式 | 命令/操作 |
+|-----------|---------|----------|
+| nodriver/patchright | 自动加载 | `--load-extension=./web-trace/dist` |
+| 可启动浏览器的Agent | CLI启动 | `msedge/chrome --load-extension=./web-trace/dist` |
+| 无法启动浏览器 | 引导用户 | 输出手动加载步骤指引 |
 
-**安装**：`git clone https://github.com/kings0527/web-trace && cd web-trace && npm install && npm run build`
-**加载**：Chrome → chrome://extensions → 开发者模式 → Load unpacked → 选择 dist/
-**连接**：通过 WebSocket (`ws://127.0.0.1:3100/mcp`) 或 Chrome Runtime Port 与 Agent 通信
+**阶段3 - 连接MCP**：
+- 自动连接：`ws://127.0.0.1:3100/mcp`
+- 验证命令：调用 `detect_protection` 确认响应正常
+
+#### 引导用户手动加载（Agent无法自动完成时）
+
+当Agent不能自动启动浏览器或加载Extension时，输出以下文字引导用户：
+
+> 请完成以下操作以启用WebTrace分析工具：
+> 1. 打开 Edge/Chrome 浏览器
+> 2. 访问 `edge://extensions` 或 `chrome://extensions`
+> 3. 开启「开发者模式」（右上角开关）
+> 4. 点击「加载已解压的扩展程序」
+> 5. 选择 `web-trace/dist` 目录
+> 6. 确认"WebTrace"已显示在扩展列表中
+> 完成后请告知，我将继续分析。
 
 #### 可用工具
 
